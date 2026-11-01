@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cek Koneksi Firebase</title>
+<style>
+body{font:16px/1.5 system-ui,sans-serif;background:#0b1020;color:#e8ecff;max-width:680px;margin:0 auto;padding:1rem}
+h1{font-size:1.3rem}h2{font-size:1.05rem;margin-top:1.5rem}
+.r{padding:.7rem 1rem;border-radius:10px;margin:.5rem 0;background:#151c38;border-left:5px solid #ffc928}
+.r.ok{border-left-color:#2bd46a}.r.no{border-left-color:#ff2d3d}
+.r small{display:block;color:#aab3d9;margin-top:.25rem}
+input,button{font:inherit;padding:.65rem .8rem;border-radius:8px;border:1px solid #3a4580;background:#0e1430;color:#fff;width:100%;box-sizing:border-box;margin:.3rem 0}
+button{background:#e5182d;border:0;font-weight:700;cursor:pointer}
+p.m{color:#aab3d9;font-size:.9rem}
+</style></head><body>
+<h1>Cek Koneksi Firebase</h1>
+<p class="m">Halaman ini menguji langkah demi langkah apakah website bisa terhubung ke project Firebase Anda dan menjelaskan apa yang kurang.</p>
+<div id="o"></div>
+<h2>Tes login admin &amp; tulis data</h2>
+<p class="m">Opsional. Menguji akun admin dan izin menulis ke database (membuat lalu menghapus satu data uji di koleksi Saran).</p>
+<input id="em" type="email" placeholder="Email admin" autocomplete="username">
+<input id="pw" type="password" placeholder="Kata sandi" autocomplete="current-password">
+<button id="go">Tes Login &amp; Tulis</button>
+<div id="o2"></div>
+<script type="module">
+const o=document.getElementById("o"),o2=document.getElementById("o2");
+const add=(box,c,t,h)=>{const d=document.createElement("div");d.className="r "+c;d.innerHTML="<b>"+t+"</b>"+(h?"<small>"+h+"</small>":"");box.appendChild(d)};
+const TO=(p,ms=10000)=>Promise.race([p,new Promise((_,j)=>setTimeout(()=>j({code:"timeout"}),ms))]);
+const hintF=c=>c=="permission-denied"?"Aturan Firestore belum dipasang / belum di-Publish. Buka Firebase Console → Firestore Database → Rules, tempel isi firestore.rules, lalu Publish.":(c=="timeout"||c=="unavailable")?"Tidak ada jawaban dari database. Biasanya Firestore Database BELUM DIBUAT. Buka Firebase Console → Build → Firestore Database → Buat database (lokasi asia-southeast2, mode Production).":"Kode: "+c;
+const hintA={"auth/invalid-credential":"Email atau kata sandi salah, atau akun belum dibuat (Authentication → Users).","auth/operation-not-allowed":"Login Email/Password belum diaktifkan (Authentication → Sign-in method → Email/Password).","auth/invalid-api-key":"apiKey di firebase-config.js salah.","auth/network-request-failed":"Tidak ada koneksi internet."};
+let FS,AU,db,au,ap;
+(async()=>{
+if(location.protocol=="file:"){add(o,"no","1. Cara membuka halaman","Halaman dibuka dari file:// . Buka lewat alamat website (https://…vercel.app/cek-koneksi.html).");return}
+add(o,"ok","1. Cara membuka halaman","Lewat "+location.origin);
+let c;
+try{({firebaseConfig:c}=await TO(import("./firebase-config.js"),8000))}catch(e){add(o,"no","2. firebase-config.js","Tidak terbaca atau formatnya salah. Isinya harus diawali: export const firebaseConfig = {…}. Pastikan file ini ter-upload di folder yang sama dengan index.html. ("+(e.message||e.code||e)+")");return}
+if(!c||!c.apiKey||String(c.apiKey).startsWith("ISI")){add(o,"no","2. firebase-config.js","Masih berisi nilai ISI… — salin konfigurasi dari Firebase Console.");return}
+add(o,"ok","2. firebase-config.js","Terbaca. Project: "+c.projectId);
+try{const B="https://www.gstatic.com/firebasejs/10.12.2/";ap=(await TO(import(B+"firebase-app.js"))).initializeApp(c);FS=await TO(import(B+"firebase-firestore.js"));AU=await TO(import(B+"firebase-auth.js"));db=FS.initializeFirestore(ap,{experimentalAutoDetectLongPolling:true});au=AU.getAuth(ap);add(o,"ok","3. Memuat Firebase dari internet","Berhasil.")}catch(e){add(o,"no","3. Memuat Firebase dari internet","Gagal. Periksa koneksi internet / jaringan yang memblokir gstatic.com. ("+(e.message||e.code||e)+")");return}
+let bad=0;
+try{const d=await TO(FS.getDoc(FS.doc(db,"settings","site")));add(o,"ok","4. Database Firestore terjangkau",d.exists()?"Dokumen pengaturan ditemukan.":"Database aktif, tetapi pengaturan belum diisi (normal untuk data kosong).")}catch(e){bad=1;add(o,"no","4. Database Firestore",hintF(e.code||e.message))}
+if(!bad){for(const k of ["activities","gallery","team"]){try{const s=await TO(FS.getDocs(FS.collection(db,k)));add(o,"ok","5. Baca koleksi "+k,s.size+" data")}catch(e){add(o,"no","5. Baca koleksi "+k,hintF(e.code||e.message))}}
+add(o,"ok","Kesimpulan","Jika semua hijau, website publik dan admin membaca database yang sama. Lanjutkan dengan tes login di bawah.")}
+else add(o,"no","Kesimpulan","Selama langkah 4 belum hijau, website publik dan admin TIDAK akan terhubung (keduanya berjalan sendiri-sendiri dalam mode demo).")
+})();
+document.getElementById("go").onclick=async()=>{
+o2.innerHTML="";if(!db){add(o2,"no","Belum siap","Selesaikan pengecekan di atas dulu.");return}
+const em=document.getElementById("em").value.trim(),pw=document.getElementById("pw").value;
+try{await TO(AU.signInWithEmailAndPassword(au,em,pw));add(o2,"ok","Login admin","Berhasil sebagai "+em)}catch(e){add(o2,"no","Login admin",(hintA[e.code]||"Gagal")+" ("+(e.code||e.message)+")");return}
+let id;
+try{const r=await TO(FS.addDoc(FS.collection(db,"feedback"),{name:"__tes_koneksi__",message:"data uji, boleh dihapus",createdAt:FS.serverTimestamp()}));id=r.id;add(o2,"ok","Tulis data ke database","Berhasil.")}catch(e){add(o2,"no","Tulis data ke database",hintF(e.code||e.message));return}
+try{const d=await TO(FS.getDoc(FS.doc(db,"feedback",id)));add(o2,d.exists()?"ok":"no","Baca kembali data",d.exists()?"Data terbaca.":"Data tidak ditemukan.")}catch(e){add(o2,"no","Baca kembali data",hintF(e.code||e.message))}
+try{await TO(FS.deleteDoc(FS.doc(db,"feedback",id)));add(o2,"ok","Hapus data uji","Berhasil. Semua izin menulis dan membaca bekerja.")}catch(e){add(o2,"no","Hapus data uji",hintF(e.code||e.message)+" — hapus manual data bernama __tes_koneksi__ di menu Saran.")}
+};
+</script></body></html>
